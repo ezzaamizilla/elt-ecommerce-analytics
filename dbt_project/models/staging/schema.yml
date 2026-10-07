@@ -53,8 +53,7 @@ models:
         data_tests:
           - not_null
           - accepted_values:
-              values: ['delivered', 'shipped', 'canceled', 'unavailable',
-                       'invoiced', 'processing', 'created', 'approved']
+              values: ['delivered', 'shipped', 'canceled', 'unavailable', 'invoiced', 'processing', 'created', 'approved']
       - name: order_purchase_timestamp
         data_tests:
           - not_null

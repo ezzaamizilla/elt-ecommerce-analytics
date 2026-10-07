@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
@@ -170,4 +171,27 @@ with DAG(
         for table in SOURCE_TABLES
     ]
 
-    init_bronze >> extracts
+    # --- dbt : qualite des sources, transformations, tests de donnees ---
+    dbt_cmd = "dbt {command} --project-dir $DBT_PROJECT_DIR --profiles-dir $DBT_PROJECT_DIR"
+
+    dbt_source_freshness = BashOperator(
+        task_id="dbt_source_freshness",
+        bash_command=dbt_cmd.format(command="source freshness"),
+        on_failure_callback=failure_callback,
+    )
+
+    dbt_run = BashOperator(
+        task_id="dbt_run",
+        bash_command=dbt_cmd.format(command="run"),
+        on_failure_callback=failure_callback,
+    )
+
+    # Un echec de test dbt fait echouer le DAG : pas de livraison de donnees
+    # de mauvaise qualite dans les marts.
+    dbt_test = BashOperator(
+        task_id="dbt_test",
+        bash_command=dbt_cmd.format(command="test"),
+        on_failure_callback=failure_callback,
+    )
+
+    init_bronze >> extracts >> dbt_source_freshness >> dbt_run >> dbt_test
