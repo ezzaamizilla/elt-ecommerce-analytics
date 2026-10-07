@@ -2,13 +2,18 @@
 
 ## 1. Connexion
 
+> ⚠️ **Ne pas confondre les bases** : le warehouse (port 5434) utilise
+> `dbt` / `warehouse_secret`. L'utilisateur `olist` / `olist_secret` appartient
+> à l'**OLTP (port 5432)** et est refusé ici → erreur
+> « Informations d'identification non valide ».
+
 | Paramètre | Valeur |
 |---|---|
 | Serveur | `localhost` |
 | Port | `5434` |
 | Base | `olist_warehouse` |
 | Schéma | `marts` |
-| Authentification | Mot de passe (`dbt` / `warehouse_secret`, voir `.env`) |
+| Authentification | Mot de passe (**utilisateur `dbt`**, mot de passe `warehouse_secret`) |
 
 Power BI Desktop → **Obtenir des données → PostgreSQL** → `localhost:5434` →
 base `olist_warehouse` → sélectionner les 7 tables du schéma `marts` → **Charger**
