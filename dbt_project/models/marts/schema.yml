@@ -1,0 +1,116 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "Calendrier couvrant la plage des commandes (2016-09 -> 2018-10)."
+    columns:
+      - name: date_id
+        description: "Clé entière AAAAMMJJ."
+        data_tests:
+          - unique
+          - not_null
+      - name: date_day
+        data_tests:
+          - unique
+          - not_null
+
+  - name: dim_customers
+    description: "Dimension client (attributs + agrégats de rétention)."
+    columns:
+      - name: customer_id
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_state
+        data_tests:
+          - not_null
+
+  - name: dim_products
+    description: "Dimension produit avec catégorie traduite."
+    columns:
+      - name: product_id
+        data_tests:
+          - unique
+          - not_null
+      - name: product_category_english
+        data_tests:
+          - not_null
+
+  - name: dim_sellers
+    description: "Dimension vendeur."
+    columns:
+      - name: seller_id
+        data_tests:
+          - unique
+          - not_null
+
+  - name: fct_orders
+    description: "Fait commande : 1 ligne = 1 commande (mesures financières, avis, livraison)."
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_id
+      - name: order_date_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_id
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              values: ['delivered', 'shipped', 'canceled', 'unavailable',
+                       'invoiced', 'processing', 'created', 'approved']
+      - name: items_revenue
+        data_tests:
+          - not_null
+
+  - name: fct_order_items
+    description: "Fait ligne de commande : 1 ligne = 1 unité produit vendue."
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('fct_orders')
+              field: order_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_products')
+              field: product_id
+      - name: seller_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_sellers')
+              field: seller_id
+      - name: order_date_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_id
+      - name: price
+        data_tests:
+          - not_null
+
+  - name: fct_revenue
+    description: "Fait revenu mensuel agrégé (utilisé pour la courbe de CA)."
+    columns:
+      - name: year_month
+        description: "Période au format YYYY-MM."
+        data_tests:
+          - unique
+          - not_null
+      - name: revenue
+        data_tests:
+          - not_null

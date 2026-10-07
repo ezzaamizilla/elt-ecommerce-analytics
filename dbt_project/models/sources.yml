@@ -1,0 +1,33 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: "Données brutes extraites de l'OLTP par le DAG Airflow (schéma bronze)."
+    database: olist_warehouse
+    schema: bronze
+    tables:
+      - name: customers
+        description: "Clients Olist (1 ligne = 1 compte client)."
+      - name: sellers
+        description: "Vendeurs marketplace."
+      - name: products
+        description: "Catalogue produits."
+      - name: category_translation
+        description: "Traduction PT -> EN des catégories de produits."
+      - name: orders
+        description: "Commandes (table centrale)."
+        freshness:
+          # Jeu de données historique (2016-2018) : seuils élargis pour rester
+          # significatifs tout en démontrant le contrôle de fraîcheur.
+          warn_after: {count: 4000, period: day}
+          error_after: {count: 5000, period: day}
+          filter: order_purchase_timestamp IS NOT NULL
+        loaded_at_field: order_purchase_timestamp
+      - name: order_items
+        description: "Lignes de commande (produit, vendeur, prix, fret)."
+      - name: order_payments
+        description: "Paiements associés aux commandes."
+      - name: order_reviews
+        description: "Avis clients (possède des doublons métier)."
+      - name: geolocation
+        description: "Coordonnées GPS par code postal."

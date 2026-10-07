@@ -1,0 +1,13 @@
+elt_ecommerce:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_WAREHOUSE_HOST') }}"
+      port: "{{ env_var('POSTGRES_WAREHOUSE_PORT', '5432') | int }}"
+      user: "{{ env_var('POSTGRES_WAREHOUSE_USER') }}"
+      pass: "{{ env_var('POSTGRES_WAREHOUSE_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_WAREHOUSE_DB') }}"
+      schema: public
+      threads: 4
+      keepalives_idle: 30
