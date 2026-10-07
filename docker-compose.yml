@@ -1,0 +1,162 @@
+name: elt-ecommerce
+
+x-airflow-common: &airflow-common
+  build:
+    context: ./airflow
+  image: elt-airflow:latest
+  environment: &airflow-env
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__DATABASE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
+    AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW_FERNET_KEY}"
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: "UTC"
+    AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: "False"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${POSTGRES_AIRFLOW_USER}:${POSTGRES_AIRFLOW_PASSWORD}@postgres-airflow:5432/${POSTGRES_AIRFLOW_DB}"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "False"
+    AIRFLOW__LOGGING__LOGGING_LEVEL: "INFO"
+    AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: "30"
+    # Connexions utilisées par le DAG (extract OLTP -> warehouse)
+    AIRFLOW_CONN_POSTGRES_OLTP: "postgresql://${POSTGRES_OLTP_USER}:${POSTGRES_OLTP_PASSWORD}@postgres-oltp:5432/${POSTGRES_OLTP_DB}"
+    AIRFLOW_CONN_POSTGRES_WAREHOUSE: "postgresql://${POSTGRES_WAREHOUSE_USER}:${POSTGRES_WAREHOUSE_PASSWORD}@postgres-warehouse:5432/${POSTGRES_WAREHOUSE_DB}"
+    # dbt (profiles.yml lit ces variables)
+    POSTGRES_WAREHOUSE_HOST: "postgres-warehouse"
+    POSTGRES_WAREHOUSE_PORT: "5432"
+    POSTGRES_WAREHOUSE_USER: "${POSTGRES_WAREHOUSE_USER}"
+    POSTGRES_WAREHOUSE_PASSWORD: "${POSTGRES_WAREHOUSE_PASSWORD}"
+    POSTGRES_WAREHOUSE_DB: "${POSTGRES_WAREHOUSE_DB}"
+    DBT_PROFILES_DIR: "/opt/dbt_project"
+    DBT_PROJECT_DIR: "/opt/dbt_project"
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./dbt_project:/opt/dbt_project
+    - ./data:/opt/data
+  depends_on:
+    postgres-oltp:
+      condition: service_healthy
+    postgres-warehouse:
+      condition: service_healthy
+    postgres-airflow:
+      condition: service_healthy
+
+x-airflow-deps: &airflow-deps
+  postgres-oltp:
+    condition: service_healthy
+  postgres-warehouse:
+    condition: service_healthy
+  postgres-airflow:
+    condition: service_healthy
+  airflow-init:
+    condition: service_completed_successfully
+
+services:
+  # ---------- Sources ----------
+  postgres-oltp:
+    image: postgres:16-alpine
+    container_name: elt-postgres-oltp
+    environment:
+      POSTGRES_USER: "${POSTGRES_OLTP_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_OLTP_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_OLTP_DB}"
+    ports:
+      - "5432:5432"
+    volumes:
+      - oltp_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_OLTP_USER} -d ${POSTGRES_OLTP_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------- Warehouse (cible dbt + Power BI) ----------
+  postgres-warehouse:
+    image: postgres:16-alpine
+    container_name: elt-postgres-warehouse
+    environment:
+      POSTGRES_USER: "${POSTGRES_WAREHOUSE_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_WAREHOUSE_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_WAREHOUSE_DB}"
+    ports:
+      - "5434:5432"
+    volumes:
+      - warehouse_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_WAREHOUSE_USER} -d ${POSTGRES_WAREHOUSE_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------- Métadonnées Airflow ----------
+  postgres-airflow:
+    image: postgres:16-alpine
+    container_name: elt-postgres-airflow
+    environment:
+      POSTGRES_USER: "${POSTGRES_AIRFLOW_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_AIRFLOW_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_AIRFLOW_DB}"
+    ports:
+      - "5435:5432"
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_AIRFLOW_USER} -d ${POSTGRES_AIRFLOW_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------- Airflow ----------
+  airflow-init:
+    <<: *airflow-common
+    container_name: elt-airflow-init
+    restart: "no"
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USERNAME}" \
+          --password "${AIRFLOW_ADMIN_PASSWORD}" \
+          --firstname Admin --lastname Airflow \
+          --role Admin --email admin@example.com || true
+        echo "Airflow init OK"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: elt-airflow-webserver
+    command: webserver
+    depends_on: *airflow-deps
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: elt-airflow-scheduler
+    command: scheduler
+    depends_on: *airflow-deps
+    restart: unless-stopped
+
+  # ---------- dbt (conteneur dédié, lancement manuel) ----------
+  elt-dbt:
+    <<: *airflow-common
+    container_name: elt-dbt
+    entrypoint: ["sleep"]
+    command: ["infinity"]
+    profiles: ["tools"]
+    restart: "no"
+
+volumes:
+  oltp_data:
+  warehouse_data:
+  airflow_db_data:

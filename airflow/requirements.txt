@@ -1,0 +1,10 @@
+# Providers Airflow
+apache-airflow-providers-postgres>=5.10,<6
+
+# dbt (versions alignées sur protobuf 4.x de l'image Airflow 2.10)
+dbt-postgres==1.8.2
+dbt-core==1.8.7
+dbt-adapters==1.1.1
+dbt-common==1.1.0
+
+psycopg2-binary>=2.9,<3
