@@ -26,12 +26,18 @@ x-airflow-common: &airflow-common
     POSTGRES_WAREHOUSE_DB: "${POSTGRES_WAREHOUSE_DB}"
     DBT_PROFILES_DIR: "/opt/dbt_project"
     DBT_PROJECT_DIR: "/opt/dbt_project"
+    POSTGRES_OLTP_HOST: "postgres-oltp"
+    POSTGRES_OLTP_PORT: "5432"
+    POSTGRES_OLTP_USER: "${POSTGRES_OLTP_USER}"
+    POSTGRES_OLTP_PASSWORD: "${POSTGRES_OLTP_PASSWORD}"
+    POSTGRES_OLTP_DB: "${POSTGRES_OLTP_DB}"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
     - ./dbt_project:/opt/dbt_project
     - ./data:/opt/data
+    - ./scripts:/opt/scripts
   depends_on:
     postgres-oltp:
       condition: service_healthy
